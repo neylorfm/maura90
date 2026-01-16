@@ -1,7 +1,7 @@
 import { SlideType, SlideData } from './types';
 
 // Dynamically import all images from the img directory
-const imageModules = import.meta.glob('./img/*.{png,jpg,jpeg,svg}', { eager: true });
+const imageModules = import.meta.glob('../public/img/*.{png,jpg,jpeg,svg}', { eager: true });
 const musicModules = import.meta.glob('./music/*.mp3', { eager: true });
 
 // Extract URLs from modules
