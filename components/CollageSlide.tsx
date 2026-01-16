@@ -11,9 +11,9 @@ interface CollageSlideProps {
   onUpdateImage?: (index: number | undefined, updates: { position?: string, scale?: number }) => void;
 }
 
-export const CollageSlide: React.FC<CollageSlideProps> = ({ data, isEditMode = false, onEditImage = () => { }, onUpdateImage }) => {
+export const CollageSlide: React.FC<CollageSlideProps> = ({ data, isEditMode = false, onEditImage = (_i) => { }, onUpdateImage }) => {
   return (
-    <div className="relative flex min-h-screen flex-col overflow-hidden bg-background-light dark:bg-background-dark text-primary-dark dark:text-white transition-colors duration-300">
+    <div className="relative flex min-h-screen flex-col overflow-y-auto md:overflow-hidden bg-background-light dark:bg-background-dark text-primary-dark dark:text-white transition-colors duration-300">
 
       {/* Ambient Background */}
       <div className="absolute inset-0 z-0 pointer-events-none opacity-40">
@@ -36,22 +36,22 @@ export const CollageSlide: React.FC<CollageSlideProps> = ({ data, isEditMode = f
           <motion.div
             initial={{ y: -20, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
-            className="text-center mb-10"
+            className="text-center mb-4 md:mb-10"
           >
-            <h1 className="text-5xl md:text-6xl font-bold tracking-tight mb-2 font-display">{data.title}</h1>
-            <p className="text-primary text-xl font-medium tracking-[0.2em] uppercase">{data.subtitle}</p>
+            <h1 className="text-3xl md:text-6xl font-bold tracking-tight mb-2 font-display">{data.title}</h1>
+            <p className="text-primary text-sm md:text-xl font-medium tracking-[0.2em] uppercase">{data.subtitle}</p>
           </motion.div>
 
-          <div className="grid grid-cols-1 md:grid-cols-12 gap-8 items-center min-h-[550px]">
+          <div className="grid grid-cols-2 md:grid-cols-12 gap-4 md:gap-8 items-center min-h-0 md:min-h-[550px]">
             {data.images.map((img, idx) => (
               <motion.div
                 key={idx}
                 initial={{ opacity: 0, y: 50, rotate: img.rotation ? img.rotation * 2 : 0 }}
                 animate={{ opacity: 1, y: 0, rotate: img.rotation || 0 }}
                 transition={{ delay: 0.2 * idx, duration: 0.8 }}
-                className={`${img.highlight ? 'col-span-1 md:col-span-6 z-10 order-first md:order-none' : 'col-span-1 md:col-span-3'} ${idx === 0 ? 'md:self-end' : ''} ${idx === 2 ? 'md:self-start' : ''}`}
+                className={`${img.highlight ? 'col-span-2 md:col-span-6 z-10 order-first md:order-none' : 'col-span-1 md:col-span-3'} ${idx === 0 ? 'md:self-end' : ''} ${idx === 2 ? 'md:self-start' : ''}`}
               >
-                <div className={`bg-white p-4 shadow-2xl rounded-sm transition-transform duration-500 hover:rotate-0 hover:scale-[1.02] ${img.highlight ? 'border-8 border-white shadow-[0_35px_60px_-15px_rgba(0,0,0,0.3)]' : ''}`}>
+                <div className={`bg-white p-2 md:p-4 shadow-2xl rounded-sm transition-transform duration-500 hover:rotate-0 hover:scale-[1.02] ${img.highlight ? 'border-4 md:border-8 border-white shadow-[0_35px_60px_-15px_rgba(0,0,0,0.3)]' : ''}`}>
                   <div className={`${img.highlight ? 'aspect-video' : 'aspect-[3/4]'} overflow-hidden rounded-sm bg-gray-100 relative`}>
                     <div
                       className="w-full h-full bg-center bg-no-repeat bg-cover hover:scale-110 transition-transform duration-[2s]"
@@ -63,23 +63,23 @@ export const CollageSlide: React.FC<CollageSlideProps> = ({ data, isEditMode = f
                     ></div>
                     <EditOverlay
                       isEditing={isEditMode}
-                      onEdit={() => onEditImage(idx)}
+                      onEdit={() => onEditImage && onEditImage(idx)}
                       currentPosition={img.position}
                       currentScale={img.scale}
                       onPositionChange={(pos) => onUpdateImage?.(idx, { position: pos })}
                       onScaleChange={(scale) => onUpdateImage?.(idx, { scale })}
                     />
                   </div>
-                  <div className="mt-4 text-center">
-                    <p className={`font-semibold ${img.highlight ? 'text-2xl text-primary-dark' : 'text-sm text-accent-gold'}`}>{img.label}</p>
-                    <p className={`text-gray-400 mt-1 uppercase tracking-widest ${img.highlight ? 'text-primary font-bold' : 'text-xs'}`}>{img.sublabel}</p>
+                  <div className="mt-2 md:mt-4 text-center">
+                    <p className={`font-semibold ${img.highlight ? 'text-lg md:text-2xl text-primary-dark' : 'text-xs md:text-sm text-accent-gold'}`}>{img.label}</p>
+                    <p className={`text-gray-400 mt-0.5 md:mt-1 uppercase tracking-widest ${img.highlight ? 'text-primary font-bold' : 'text-[10px] md:text-xs'}`}>{img.sublabel}</p>
                   </div>
                 </div>
               </motion.div>
             ))}
           </div>
 
-          <div className="mt-12 flex flex-wrap justify-center gap-6 md:gap-12">
+          <div className="mt-6 md:mt-12 flex flex-wrap justify-center gap-6 md:gap-12">
             {data.stats.map((stat, idx) => (
               <React.Fragment key={idx}>
                 <div className="text-center group">
