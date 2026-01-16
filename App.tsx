@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { APP_DATA, MUSIC_TRACKS } from './constants';
 import { SlideType, SlideData } from './types';
 import { CoverSlide } from './components/CoverSlide';
@@ -8,7 +8,6 @@ import { CollageSlide } from './components/CollageSlide';
 import { TimelineSlide } from './components/TimelineSlide';
 import { QuotesSlide } from './components/QuotesSlide';
 import { MultiPhotoSlide } from './components/MultiPhotoSlide';
-import { Navigation } from './components/Navigation';
 import { SlideTransition } from './components/SlideTransition';
 import { PhotoPicker } from './components/PhotoPicker';
 
@@ -16,6 +15,9 @@ import { ExportModal } from './components/ExportModal';
 import { ScreenRecorder } from './components/ScreenRecorder';
 
 const App: React.FC = () => {
+  // Mode Selection: null (selection screen) | 'manual' | 'auto'
+  const [presentationMode, setPresentationMode] = useState<'manual' | 'auto' | null>(null);
+
   // State for slides with localStorage persistence
   const [slides, setSlides] = useState<SlideData[]>(() => {
     const saved = localStorage.getItem('maura-journey-slides-v24');
@@ -27,6 +29,11 @@ const App: React.FC = () => {
   const [showExportModal, setShowExportModal] = useState(false);
   const [exportCode, setExportCode] = useState('');
   const [editingImageId, setEditingImageId] = useState<{ slideId: string, imageIndex?: number } | null>(null);
+
+  // Auto-Play State
+  const [isAutoPlaying, setIsAutoPlaying] = useState(false);
+  const timerRef = useRef<number | null>(null);
+  const [audioDuration, setAudioDuration] = useState(0);
 
   const totalSlides = slides.length;
 
@@ -53,6 +60,8 @@ const App: React.FC = () => {
 
   // Keyboard navigation
   useEffect(() => {
+    if (presentationMode !== 'manual') return;
+
     const handleKeyDown = (e: KeyboardEvent) => {
       // Disable nav if Shift is held (for bubble dragging) or if picker/modal is open
       if (e.shiftKey || editingImageId || showExportModal) return;
@@ -63,7 +72,7 @@ const App: React.FC = () => {
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [handleNext, handlePrev, editingImageId, showExportModal]);
+  }, [handleNext, handlePrev, editingImageId, showExportModal, presentationMode]);
 
   const handleImageUpdate = (newImageSrc: string) => {
     if (!editingImageId) return;
@@ -131,13 +140,6 @@ const App: React.FC = () => {
   const generateExportCode = () => {
     // Helper to format the generated code
     const imports = "import { SlideType, SlideData } from './types';\n\n// Dynamically import all images from the img directory\nconst imageModules = import.meta.glob('./img/*.{png,jpg,jpeg,svg}', { eager: true });\n\n// Extract URLs from modules\nexport const IMAGES: string[] = Object.values(imageModules).map((mod: any) => mod.default);\n\n// Helper to get random image\nconst getRandomImage = () => IMAGES[Math.floor(Math.random() * IMAGES.length)];\n\n// Helper to get image at specific index (looping)\nconst getImage = (index: number) => IMAGES[index % IMAGES.length];\n\n";
-
-    // Formatting the array is tricky because we need to preserve function calls like getImage() if possible,
-    // OR just dump the raw data if the user has replaced them with static strings.
-    // For safety and simplicity in "Edit Mode" exports, we will flatten everything to actual string values
-    // since the user is visually editing the *result*.
-    // However, if we want to be fancy, we can try to keep logic, but 'JSON.stringify' will resolve values.
-    // Let's use JSON.stringify but clean it up to look like valid TS code (removing quotes from keys, etc if needed, though JSON is valid JS/TS).
 
     // Actually, passing JSON straight into the variable is fine.
     const dataExport = `export const APP_DATA: SlideData[] = ${JSON.stringify(slides, null, 2)};`;
@@ -242,7 +244,138 @@ const App: React.FC = () => {
   });
   const audioRef = useRef<HTMLAudioElement>(null);
 
-  // Fade out logic when reaching the last slide
+  // Audio Metadata for Auto-Play
+  useEffect(() => {
+    const audio = audioRef.current;
+    if (!audio) return;
+
+    const onLoadedMetadata = () => {
+      setAudioDuration(audio.duration);
+    };
+
+    audio.addEventListener('loadedmetadata', onLoadedMetadata);
+    return () => audio.removeEventListener('loadedmetadata', onLoadedMetadata);
+  }, [audioSrc]);
+
+
+  // Logic for Auto-Play start with Variable Timing
+  const startAutoPlay = () => {
+    if (!audioRef.current || audioDuration === 0) {
+      setPresentationMode('auto');
+      return;
+    }
+
+    const audio = audioRef.current;
+
+    // Clear any existing timer before starting
+    if (timerRef.current) clearTimeout(timerRef.current);
+
+    audio.play()
+      .then(() => {
+        setIsAutoPlaying(true);
+        setPresentationMode('auto');
+
+        // --- Custom Timing Logic ---
+        // 1. Slide 0: 0s -> 12s (Duration: 12000ms)
+        // 2. Slide 1: 12s -> 23s (Duration: 11000ms)
+        // 3. Middle Slides (Index 2 to Total-3): 23s -> 3m09s (189s). Duration: 166s distributed.
+        //    - Collage = 2x weight
+        //    - Others = 1x weight
+        // 4. Last 2 Slides (Total-2, Total-1): 189s -> End. Split equally.
+
+        const middleStartTime = 23;
+        const endingStartTime = 189; // 3m09s
+
+        // Ensure we have enough slides and duration logic holds
+        if (totalSlides < 5 || audioDuration < endingStartTime) {
+          console.warn("Audio too short or too few slides for custom timing logic, falling back to simple division.");
+          // Fallback logic could go here, but for now we proceed as best effort or standard 
+        }
+
+        const durations: number[] = new Array(totalSlides).fill(0);
+
+        // Slide 0 & 1
+        durations[0] = 12000;
+        durations[1] = 11000;
+
+        // Middle Section
+        const middleStartIndex = 2;
+        const middleEndIndex = totalSlides - 3; // Inclusive of the last middle slide
+        // Check if middle section exists
+        if (middleEndIndex >= middleStartIndex) {
+          let totalWeight = 0;
+          for (let i = middleStartIndex; i <= middleEndIndex; i++) {
+            if (slides[i].type === SlideType.COLLAGE) {
+              totalWeight += 2;
+            } else {
+              totalWeight += 1;
+            }
+          }
+
+          const availableTimeMiddle = (endingStartTime - middleStartTime) * 1000;
+          const baseUnit = availableTimeMiddle / totalWeight;
+
+          for (let i = middleStartIndex; i <= middleEndIndex; i++) {
+            if (slides[i].type === SlideType.COLLAGE) {
+              durations[i] = baseUnit * 2;
+            } else {
+              durations[i] = baseUnit;
+            }
+          }
+        }
+
+        // Last 2 Slides
+        const lastTwoStartIndex = totalSlides - 2;
+        if (lastTwoStartIndex >= 0) {
+          const availableTimeEnd = Math.max(0, (audioDuration - endingStartTime)) * 1000; // Time from 3:09 to End
+          // Use audio duration or a safe buffer (e.g. -2s) to ensure it doesn't cut prematurely? 
+          // Logic asked for "starting from 3:09", so we split the remainder.
+          const durationPerSlide = (availableTimeEnd - 2000) / 2; // Subtract 2s buffer at very end
+
+          durations[totalSlides - 2] = Math.max(3000, durationPerSlide);
+          durations[totalSlides - 1] = Math.max(3000, durationPerSlide);
+        }
+
+        console.log("Calculated Durations:", durations.map(d => Math.round(d / 1000) + 's'));
+
+        // Recursive timeout function
+        let step = 0;
+        const playNext = () => {
+          if (step >= totalSlides - 1) {
+            // End
+            return;
+          }
+
+          // Calculate delay for NEXT slide transit
+          const delay = durations[step];
+
+          timerRef.current = window.setTimeout(() => {
+            setCurrentSlideIndex(prev => prev + 1);
+            step++;
+            playNext();
+          }, delay);
+        };
+
+        // Start the chain
+        playNext();
+
+      })
+      .catch(e => {
+        console.error("Auto-play error:", e);
+        // Fallback if audio fails
+        setPresentationMode('auto');
+      });
+  };
+
+  // Cleanup Timer (now setTimeout)
+  useEffect(() => {
+    return () => {
+      if (timerRef.current) clearTimeout(timerRef.current);
+    };
+  }, []);
+
+
+  // Fade out logic when reaching the last slide (Manual & Auto)
   useEffect(() => {
     const audio = audioRef.current;
     if (!audio) return;
@@ -262,33 +395,37 @@ const App: React.FC = () => {
       }, 200);
       return () => clearInterval(fadeAudio);
     } else {
-      // Fade in / Start playing
-      if (audio.paused && audioSrc) {
-        audio.volume = 0;
-        const playPromise = audio.play();
-        if (playPromise !== undefined) {
-          playPromise
-            .then(() => {
-              // Fade in
-              const fadeAudio = setInterval(() => {
-                if (audio.volume < 0.95) {
-                  audio.volume += 0.05;
-                } else {
-                  audio.volume = 1;
-                  clearInterval(fadeAudio);
-                }
-              }, 200);
-            })
-            .catch(error => {
-              console.log("Audio play prevented:", error);
-            });
+      // If manual mode, handle auto-play of music only if not already played?
+      // Actually, typically manual presentations might not auto-start music unless requested.
+      // But for this legacy behavior, we can keep it attempting to play if desired, 
+      // OR only play in 'auto' mode.
+      // Let's stick to: Auto mode -> Music Enforced. Manual Mode -> Music Optional/Autostart if possible.
+
+      if (presentationMode === 'manual' || presentationMode === 'auto') {
+        if (audio.paused && audioSrc) {
+          audio.volume = 0;
+          const playPromise = audio.play();
+          if (playPromise !== undefined) {
+            playPromise
+              .then(() => {
+                // Fade in
+                const fadeAudio = setInterval(() => {
+                  if (audio.volume < 0.95) {
+                    audio.volume += 0.05;
+                  } else {
+                    audio.volume = 1;
+                    clearInterval(fadeAudio);
+                  }
+                }, 200);
+              })
+              .catch(() => {
+                // Autoplay blocked meant interaction required usually.
+              });
+          }
         }
-      } else if (audio.volume < 1) {
-        // Just restore volume if it was fading out but didn't stop
-        audio.volume = 1;
       }
     }
-  }, [currentSlideIndex, totalSlides, audioSrc]);
+  }, [currentSlideIndex, totalSlides, audioSrc, presentationMode]);
 
   const handleMusicUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -298,10 +435,68 @@ const App: React.FC = () => {
     }
   };
 
+  const toggleFullScreen = () => {
+    if (!document.fullscreenElement) {
+      document.documentElement.requestFullscreen().catch(err => {
+        console.error(`Error attempting to enable full-screen mode: ${err.message} (${err.name})`);
+      });
+    } else {
+      if (document.exitFullscreen) {
+        document.exitFullscreen();
+      }
+    }
+  };
+
+  // --- Render Mode Selection Screen ---
+  if (presentationMode === null) {
+    return (
+      <div className="h-screen w-screen flex flex-col items-center justify-center bg-background-light dark:bg-background-dark text-center p-8">
+        <h1 className="font-serif text-5xl md:text-7xl text-primary mb-4">Maura 90 Anos</h1>
+        <p className="font-sans text-xl md:text-2xl text-gray-600 dark:text-gray-300 mb-8 max-w-2xl">
+          Uma jornada de amor, luta e sabedoria celebrada em momentos inesquecíveis.
+        </p>
+
+        {/* Full Screen Recommendation */}
+        <div className="mb-8 flex flex-col items-center gap-2 animate-fade-in delay-700">
+          <button
+            onClick={toggleFullScreen}
+            className="flex items-center gap-2 text-primary hover:text-primary-dark transition-colors text-sm md:text-base font-medium bg-primary/10 px-4 py-2 rounded-full hover:bg-primary/20"
+          >
+            <span className="material-symbols-outlined text-lg">fullscreen</span>
+            Recomendamos assistir em Tela Cheia
+          </button>
+        </div>
+
+        <div className="flex flex-col items-center gap-6">
+          <button
+            onClick={startAutoPlay}
+            className="group relative px-12 py-6 bg-primary text-white text-2xl font-display font-medium rounded-full shadow-lg hover:shadow-2xl hover:scale-105 transition-all duration-300 flex items-center gap-4 overflow-hidden"
+          >
+            <div className="absolute inset-0 bg-white/20 translate-y-full group-hover:translate-y-0 transition-transform duration-500 ease-out" />
+            <span className="relative z-10">Iniciar Homenagem</span>
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-8 h-8 relative z-10 animate-pulse">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M5.25 5.653c0-.856.917-1.398 1.667-.986l11.54 6.348a1.125 1.125 0 010 1.971l-11.54 6.347a1.125 1.125 0 01-1.667-.985V5.653z" />
+            </svg>
+          </button>
+
+          <button
+            onClick={() => setPresentationMode('manual')}
+            className="mt-8 text-sm text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 transition-colors border-b border-transparent hover:border-gray-400 pb-0.5"
+          >
+            Modo Manual (Avançado)
+          </button>
+        </div>
+
+        {/* Hidden Audio for Metadata Loading */}
+        <audio ref={audioRef} src={audioSrc || undefined} preload="metadata" />
+      </div>
+    );
+  }
+
   return (
     <div className="relative w-full h-[100dvh] overflow-hidden bg-background text-primary font-sans selection:bg-primary selection:text-white">
       {/* Audio Element */}
-      <audio ref={audioRef} src={audioSrc || undefined} loop />
+      <audio ref={audioRef} src={audioSrc || undefined} loop={presentationMode === 'manual'} />
 
       {/* Progress Bar */}
       <div className="fixed top-0 left-0 w-full h-1 bg-gray-200 z-50">
@@ -313,75 +508,75 @@ const App: React.FC = () => {
         />
       </div>
 
-      {/* Top Right Controls */}
-      <div className="fixed top-4 right-4 z-[9999] flex items-center gap-2">
-        <ScreenRecorder audioRef={audioRef} />
+      {/* Top Right Controls - Only show in Manual Mode or for critical overrides */}
+      {presentationMode === 'manual' && (
+        <div className="fixed top-4 right-4 z-[9999] flex items-center gap-2">
+          <ScreenRecorder audioRef={audioRef} />
 
-        {/* Link to Auto-Play Version */}
-        <a
-          href="/video.html"
-          target="_blank"
-          className="w-10 h-10 rounded-full bg-white/80 dark:bg-black/40 backdrop-blur-sm border border-gray-200 dark:border-gray-700 flex items-center justify-center hover:bg-white text-primary-dark dark:text-white shadow-sm transition-all hover:scale-105"
-          title="Versão Automática (Para Instagram)"
-        >
-          <span className="material-symbols-outlined text-xl">smart_display</span>
-        </a>
-
-        {/* Music Control */}
-        <div className="relative group">
-          <label htmlFor="music-upload" className="w-10 h-10 rounded-full bg-white/80 dark:bg-black/40 backdrop-blur-sm border border-gray-200 dark:border-gray-700 flex items-center justify-center cursor-pointer hover:bg-white dark:hover:bg-black/60 transition-all shadow-sm text-primary-dark dark:text-white group-hover:scale-105">
-            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M9 18V5l12-2v13"></path>
-              <circle cx="6" cy="18" r="3"></circle>
-              <circle cx="18" cy="16" r="3"></circle>
-            </svg>
-          </label>
-          <input
-            id="music-upload"
-            type="file"
-            accept="audio/mp3,audio/*"
-            className="hidden"
-            onChange={handleMusicUpload}
-          />
-          {/* Tooltip */}
-          <div className="absolute top-full right-0 mt-2 px-2 py-1 bg-black text-white text-xs rounded opacity-0 group-hover:opacity-100 whitespace-nowrap pointer-events-none transition-opacity">
-            {audioSrc ? 'Alterar Música' : 'Adicionar Música'}
+          {/* Music Control */}
+          <div className="relative group">
+            <label htmlFor="music-upload" className="w-10 h-10 rounded-full bg-white/80 dark:bg-black/40 backdrop-blur-sm border border-gray-200 dark:border-gray-700 flex items-center justify-center cursor-pointer hover:bg-white dark:hover:bg-black/60 transition-all shadow-sm text-primary-dark dark:text-white group-hover:scale-105">
+              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M9 18V5l12-2v13"></path>
+                <circle cx="6" cy="18" r="3"></circle>
+                <circle cx="18" cy="16" r="3"></circle>
+              </svg>
+            </label>
+            <input
+              id="music-upload"
+              type="file"
+              accept="audio/mp3,audio/*"
+              className="hidden"
+              onChange={handleMusicUpload}
+            />
+            {/* Tooltip */}
+            <div className="absolute top-full right-0 mt-2 px-2 py-1 bg-black text-white text-xs rounded opacity-0 group-hover:opacity-100 whitespace-nowrap pointer-events-none transition-opacity">
+              {audioSrc ? 'Alterar Música' : 'Adicionar Música'}
+            </div>
           </div>
-        </div>
 
-        {/* Edit Mode Toggle */}
-        <button
-          onClick={() => setIsEditMode(!isEditMode)}
-          className={`w-10 h-10 rounded-full flex items-center justify-center transition-all shadow-sm ${isEditMode ? 'bg-primary text-white scale-110' : 'bg-white/80 dark:bg-black/40 backdrop-blur-sm border border-gray-200 dark:border-gray-700 hover:bg-white text-primary-dark dark:text-white'}`}
-          title={isEditMode ? "Sair da Edição" : "Entrar na Edição"}
-        >
-          {isEditMode ? (
-            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6L6 18M6 6l12 12" /></svg>
-          ) : (
-            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
-              <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
-            </svg>
-          )}
-        </button>
-
-        {/* Export Button (only in edit mode) */}
-        {isEditMode && (
+          {/* Edit Mode Toggle */}
           <button
-            onClick={generateExportCode}
-            className="w-10 h-10 rounded-full bg-accent-gold text-white flex items-center justify-center shadow-sm hover:scale-105 transition-all"
-            title="Salvar Alterações"
+            onClick={() => setIsEditMode(!isEditMode)}
+            className={`w-10 h-10 rounded-full flex items-center justify-center transition-all shadow-sm ${isEditMode ? 'bg-primary text-white scale-110' : 'bg-white/80 dark:bg-black/40 backdrop-blur-sm border border-gray-200 dark:border-gray-700 hover:bg-white text-primary-dark dark:text-white'}`}
+            title={isEditMode ? "Sair da Edição" : "Entrar na Edição"}
           >
-            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg>
+            {isEditMode ? (
+              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6L6 18M6 6l12 12" /></svg>
+            ) : (
+              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+              </svg>
+            )}
           </button>
-        )}
-      </div>
+
+          {/* Export Button (only in edit mode) */}
+          {isEditMode && (
+            <button
+              onClick={generateExportCode}
+              className="w-10 h-10 rounded-full bg-accent-gold text-white flex items-center justify-center shadow-sm hover:scale-105 transition-all"
+              title="Salvar Alterações"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg>
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* Back to Home Button (Hidden in Auto Mode unless hovered?) - No, simple refresh to reset */}
+      {presentationMode === 'manual' && (
+        <button
+          onClick={() => window.location.reload()}
+          className="fixed bottom-4 left-4 z-50 text-white/20 hover:text-white/80 transition-colors text-xs uppercase tracking-widest"
+        >
+          Voltar ao Início
+        </button>
+      )}
 
       <SlideTransition id={currentData.id} type={currentData.type}>
         {renderSlide(currentData)}
       </SlideTransition>
-
-
 
       <PhotoPicker
         isOpen={!!editingImageId}

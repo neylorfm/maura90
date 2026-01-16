@@ -4,6 +4,6 @@
 
 @layer base {
   body {
-    @apply antialiased text-gray-900 overflow-hidden;
+    @apply antialiased text-gray-900 overflow-hidden bg-background-light dark:bg-background-dark transition-colors duration-500;
   }
 }

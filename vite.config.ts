@@ -23,7 +23,6 @@ export default defineConfig(({ mode }) => {
       rollupOptions: {
         input: {
           main: path.resolve(__dirname, 'index.html'),
-          video: path.resolve(__dirname, 'video.html'),
         },
       },
     }

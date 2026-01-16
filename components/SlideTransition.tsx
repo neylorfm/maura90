@@ -10,24 +10,24 @@ interface SlideTransitionProps {
 
 const variants: Record<string, Variants> = {
   default: {
-    initial: { opacity: 0, scale: 1.1, filter: "blur(10px)" },
-    animate: { opacity: 1, scale: 1, filter: "blur(0px)" },
-    exit: { opacity: 0, scale: 0.95, filter: "blur(5px)" },
+    initial: { opacity: 0, scale: 1.05, filter: "blur(5px)", zIndex: 1 },
+    animate: { opacity: 1, scale: 1, filter: "blur(0px)", zIndex: 2 },
+    exit: { opacity: 0, scale: 1, filter: "blur(0px)", zIndex: 1 },
   },
   timeline: {
-    initial: { x: 100, opacity: 0 },
-    animate: { x: 0, opacity: 1 },
-    exit: { x: -100, opacity: 0 },
+    initial: { opacity: 0, x: 50, zIndex: 1 },
+    animate: { opacity: 1, x: 0, zIndex: 2 },
+    exit: { opacity: 0, x: -50, zIndex: 1 },
   },
   cover: {
-    initial: { opacity: 0, y: 50 },
-    animate: { opacity: 1, y: 0, transition: { duration: 1.5, ease: "easeOut" } },
-    exit: { opacity: 0, y: -50 },
+    initial: { opacity: 0, scale: 1.1, zIndex: 1 },
+    animate: { opacity: 1, scale: 1, transition: { duration: 1.5, ease: "easeOut" }, zIndex: 2 },
+    exit: { opacity: 0, zIndex: 1 },
   },
   collage: {
-    initial: { opacity: 0, rotate: -2, scale: 0.9 },
-    animate: { opacity: 1, rotate: 0, scale: 1 },
-    exit: { opacity: 0, rotate: 2, scale: 1.1 },
+    initial: { opacity: 0, scale: 1.05, zIndex: 1 },
+    animate: { opacity: 1, scale: 1, zIndex: 2 },
+    exit: { opacity: 0, scale: 1, zIndex: 1 },
   }
 };
 
@@ -46,15 +46,15 @@ export const SlideTransition: React.FC<SlideTransitionProps> = ({ children, id, 
   };
 
   return (
-    <AnimatePresence mode="wait">
+    <AnimatePresence>
       <motion.div
         key={id}
         variants={getVariant()}
         initial="initial"
         animate="animate"
         exit="exit"
-        transition={{ duration: 0.8, ease: [0.22, 1, 0.36, 1] }} // Custom cubic bezier for "elegant" feel
-        className="w-full h-full"
+        transition={{ duration: 1.2, ease: "easeInOut" }}
+        className="absolute inset-0 w-full h-full"
       >
         {children}
       </motion.div>
