@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en" class="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Maura 90 Anos - Vídeo</title>
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <link
+      href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,200..800;1,6..72,200..800&family=Noto+Sans:wght@400;500;700&family=Public+Sans:wght@300;400;700;900&display=swap"
+      rel="stylesheet"
+    />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap"
+      rel="stylesheet"
+    />
+    <script>
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              primary: "#eeb72b",
+              "background-light": "#f8f7f6",
+              "background-dark": "#221d10",
+              "primary-dark": "#181611",
+              "accent-gold": "#897e61",
+            },
+            fontFamily: {
+              display: ["Public Sans", "sans-serif"],
+              serif: ["Newsreader", "serif"],
+              sans: ["Noto Sans", "sans-serif"],
+            },
+            backgroundImage: {
+              'grain-overlay': "url('https://cdnjs.cloudflare.com/ajax/libs/startbootstrap-clean-blog/5.0.10/img/home-bg.jpg')",
+            }
+          },
+        },
+      };
+    </script>
+    <style>
+      body {
+        margin: 0;
+        padding: 0;
+        overflow: hidden;
+      }
+      .scrollbar-hide::-webkit-scrollbar {
+          display: none;
+      }
+      .text-glow {
+        text-shadow: 0 0 20px rgba(238, 183, 43, 0.3);
+      }
+    </style>
+  <script type="importmap">
+{
+  "imports": {
+    "react-dom/": "https://esm.sh/react-dom@^19.2.3/",
+    "framer-motion": "https://esm.sh/framer-motion@^12.26.2",
+    "react/": "https://esm.sh/react@^19.2.3/",
+    "react": "https://esm.sh/react@^19.2.3"
+  }
+}
+</script>
+<link rel="stylesheet" href="/index.css">
+</head>
+  <body class="bg-background-light dark:bg-background-dark text-primary-dark dark:text-white antialiased selection:bg-primary selection:text-white">
+    <div id="root"></div>
+  <script type="module" src="/src/video/main.tsx"></script>
+</body>
+</html>
