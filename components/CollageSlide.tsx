@@ -79,7 +79,7 @@ export const CollageSlide: React.FC<CollageSlideProps> = ({ data, isEditMode = f
             ))}
           </div>
 
-          <div className="mt-6 md:mt-12 flex flex-wrap justify-center gap-6 md:gap-12">
+          <div className="mt-6 md:mt-12 hidden md:flex flex-wrap justify-center gap-6 md:gap-12">
             {data.stats.map((stat, idx) => (
               <React.Fragment key={idx}>
                 <div className="text-center group">
