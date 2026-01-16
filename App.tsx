@@ -14,6 +14,31 @@ import { PhotoPicker } from './components/PhotoPicker';
 import { ExportModal } from './components/ExportModal';
 import { ScreenRecorder } from './components/ScreenRecorder';
 
+// Helper to extract all image URLs from a slide
+const getImagesFromSlide = (slide: SlideData): string[] => {
+  const images: string[] = [];
+
+  switch (slide.type) {
+    case SlideType.PHOTO_SHOWCASE:
+      if (slide.image) images.push(slide.image);
+      break;
+    case SlideType.COLLAGE:
+      if (slide.images) slide.images.forEach(img => images.push(img.src));
+      break;
+    case SlideType.TIMELINE:
+      if (slide.events) slide.events.forEach(evt => evt.image && images.push(evt.image));
+      break;
+    case SlideType.MULTI_PHOTO:
+      if (slide.images) slide.images.forEach(img => images.push(img.src));
+      break;
+    case SlideType.QUOTES:
+      if (slide.centralImage) images.push(slide.centralImage);
+      if (slide.floatingImages) slide.floatingImages.forEach(img => images.push(img.src));
+      break;
+  }
+  return images;
+};
+
 const App: React.FC = () => {
   // Mode Selection: null (selection screen) | 'manual' | 'auto'
   const [presentationMode, setPresentationMode] = useState<'manual' | 'auto' | null>(null);
@@ -36,6 +61,35 @@ const App: React.FC = () => {
   const [audioDuration, setAudioDuration] = useState(0);
 
   const totalSlides = slides.length;
+
+  // Intelligent Image Preloading - Load ALL images in background
+  useEffect(() => {
+    // We prioritize the next 3 slides for immediate interaction, then load the rest
+    const loadAllImages = () => {
+      // 1. Immediate priority (Next 3)
+      for (let i = 1; i <= 3; i++) {
+        const nextIndex = (currentSlideIndex + i) % totalSlides;
+        getImagesFromSlide(slides[nextIndex]).forEach(url => {
+          if (url) new Image().src = url;
+        });
+      }
+
+      // 2. Background load everything else (with a small delay to not block UI thread immediately)
+      setTimeout(() => {
+        slides.forEach((slide, index) => {
+          // Skip the ones we just likely loaded
+          const distance = (index - currentSlideIndex + totalSlides) % totalSlides;
+          if (distance <= 3) return;
+
+          getImagesFromSlide(slide).forEach(url => {
+            if (url) new Image().src = url;
+          });
+        });
+      }, 1000);
+    };
+
+    loadAllImages();
+  }, [slides, totalSlides]); // Only run when slides change (initially), not on every index change to avoid re-triggering full loop
 
   useEffect(() => {
     // If we just upgraded to v24 and have no saved data for it, ensure we are using APP_DATA
