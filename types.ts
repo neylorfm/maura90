@@ -97,6 +97,7 @@ export interface QuotesData extends BaseSlide {
     x: number; // percentage 0-100
     y: number; // percentage 0-100
     size: number; // pixels (or relative scale)
+    cyclic?: boolean;
   }[];
 }
 

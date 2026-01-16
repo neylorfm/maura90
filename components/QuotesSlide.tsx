@@ -8,6 +8,8 @@ interface QuotesSlideProps {
   isEditMode?: boolean;
   onEditImage?: (index?: number) => void;
   onUpdateImage?: (index: number | undefined, updates: { position?: string, scale?: number, x?: number, y?: number }) => void;
+  isFinished?: boolean;
+  allImages?: string[];
 }
 
 const CoordinateVisor = ({ x, y, index }: { x: number, y: number, index: number }) => (
@@ -38,7 +40,9 @@ const FloatingBubble = ({
   mainRef,
   onSelect,
   onEdit,
-  onUpdate
+  onUpdate,
+  isVisible = true,
+  overrideSrc
 }: {
   img: any,
   index: number,
@@ -48,8 +52,17 @@ const FloatingBubble = ({
   mainRef: React.RefObject<HTMLElement>,
   onSelect: () => void,
   onEdit: () => void,
-  onUpdate: (idx: number, updates: { x: number, y: number }) => void
+  onUpdate: (idx: number, updates: { x: number, y: number }) => void,
+  isVisible?: boolean,
+  overrideSrc?: string | null
 }) => {
+  const [currentSrc, setCurrentSrc] = useState(img.src);
+
+  useEffect(() => {
+    if (overrideSrc) {
+      setCurrentSrc(overrideSrc);
+    }
+  }, [overrideSrc]);
 
 
 
@@ -59,8 +72,8 @@ const FloatingBubble = ({
       key={index}
       initial={{ opacity: 0, scale: 0 }}
       animate={{
-        opacity: 1,
-        scale: isSelected ? 1.1 : 1,
+        opacity: isVisible ? 1 : 0,
+        scale: isVisible ? (isSelected ? 1.1 : 1) : 0,
         x: 0,
         y: 0,
         zIndex: isSelected ? 50 : 20
@@ -85,7 +98,7 @@ const FloatingBubble = ({
         touchAction: 'none'
       }}
     >
-      <img src={img.src} alt="" className="w-full h-full object-cover pointer-events-none" />
+      <img src={currentSrc} alt="" className="w-full h-full object-cover pointer-events-none transition-opacity duration-500" />
 
       {isEditMode && (
         <div className={`absolute inset-0 bg-black/40 flex items-center justify-center gap-2 transition-opacity duration-200 ${isSelected || isShiftHeld ? 'opacity-100' : 'opacity-0 hover:opacity-100'}`}>
@@ -102,64 +115,71 @@ const FloatingBubble = ({
           >
             <span className="material-symbols-outlined text-lg">add_a_photo</span>
           </button>
-
         </div>
       )}
     </motion.div>
   );
 };
 
-export const QuotesSlide: React.FC<QuotesSlideProps> = ({ data, isEditMode = false, onEditImage = () => { }, onUpdateImage }) => {
+export const QuotesSlide: React.FC<QuotesSlideProps> = ({ data, isEditMode = false, onEditImage = () => { }, onUpdateImage, isFinished = false, allImages = [] }) => {
   const mainRef = React.useRef<HTMLElement>(null);
   const [selectedBubbleIndex, setSelectedBubbleIndex] = useState<number | null>(null);
   const [isShiftHeld, setIsShiftHeld] = useState(false);
 
+  // Consume and Vanish Logic
+  const [hiddenBubbleIndices, setHiddenBubbleIndices] = useState<Set<number>>(new Set());
+  const [consumerOverrideSrc, setConsumerOverrideSrc] = useState<string | null>(null);
+  const [isConsumerHidden, setIsConsumerHidden] = useState(false);
+
   useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Shift') setIsShiftHeld(true);
+    if (!isFinished || !data.floatingImages) return;
 
-      // Movement Logic
-      if (selectedBubbleIndex !== null && data.floatingImages && mainRef.current && e.shiftKey) {
-        const moveKeys = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'];
-        if (moveKeys.includes(e.key)) {
-          e.preventDefault();
-          e.stopPropagation();
+    const consumerIndex = data.floatingImages.findIndex(img => img.cyclic);
+    if (consumerIndex === -1) return;
 
-          const currentBubble = data.floatingImages[selectedBubbleIndex];
-          const rect = mainRef.current.getBoundingClientRect();
-          // 1px in percentage
-          const xStep = (1 / rect.width) * 100;
-          const yStep = (1 / rect.height) * 100;
+    const targetIndices = data.floatingImages
+      .map((_, idx) => idx)
+      .filter(idx => idx !== consumerIndex);
 
-          let newX = currentBubble.x || 0;
-          let newY = currentBubble.y || 0;
+    // Shuffle target indices for random consumption order
+    for (let i = targetIndices.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [targetIndices[i], targetIndices[j]] = [targetIndices[j], targetIndices[i]];
+    }
 
-          if (e.key === 'ArrowLeft') newX -= xStep;
-          if (e.key === 'ArrowRight') newX += xStep;
-          if (e.key === 'ArrowUp') newY -= yStep;
-          if (e.key === 'ArrowDown') newY += yStep;
+    let currentIndex = 0;
 
-          // Clamp values
-          newX = Math.max(0, Math.min(100, newX));
-          newY = Math.max(0, Math.min(100, newY));
-
-          if (onUpdateImage) {
-            onUpdateImage(1000 + selectedBubbleIndex, { x: newX, y: newY });
-          }
-        }
+    const consumeNext = () => {
+      if (currentIndex >= targetIndices.length) {
+        // All consumed, now vanish the consumer
+        setTimeout(() => {
+          setIsConsumerHidden(true);
+        }, 2000);
+        return;
       }
-    };
-    const handleKeyUp = (e: KeyboardEvent) => {
-      if (e.key === 'Shift') setIsShiftHeld(false);
+
+      const targetIndex = targetIndices[currentIndex];
+      const targetImg = data.floatingImages![targetIndex];
+
+      // 1. Update Consumer to show target image
+      setConsumerOverrideSrc(targetImg.src);
+
+      // 2. Hide target bubble immediately (or short delay)
+      // Let's hide it immediately to simulate "it moved to the center"
+      setHiddenBubbleIndices(prev => new Set(prev).add(targetIndex));
+
+      currentIndex++;
+
+      // Wait before next consumption
+      setTimeout(consumeNext, 3000);
     };
 
-    window.addEventListener('keydown', handleKeyDown);
-    window.addEventListener('keyup', handleKeyUp);
-    return () => {
-      window.removeEventListener('keydown', handleKeyDown);
-      window.removeEventListener('keyup', handleKeyUp);
-    };
-  }, [selectedBubbleIndex, data.floatingImages, onUpdateImage]);
+    // Start delay
+    const startTimeout = setTimeout(consumeNext, 1000);
+
+    return () => clearTimeout(startTimeout);
+
+  }, [isFinished, data.floatingImages]);
 
   // Deselect when clicking outside
   const handleBackgroundClick = () => {
@@ -210,6 +230,8 @@ export const QuotesSlide: React.FC<QuotesSlideProps> = ({ data, isEditMode = fal
                 onSelect={() => setSelectedBubbleIndex(idx)}
                 onEdit={() => onEditImage && onEditImage(1000 + idx)}
                 onUpdate={(idx, updates) => onUpdateImage && onUpdateImage(1000 + idx, updates)}
+                isVisible={img.cyclic ? !isConsumerHidden : !hiddenBubbleIndices.has(idx)}
+                overrideSrc={img.cyclic ? consumerOverrideSrc : null}
               />
             ))}
           </div>

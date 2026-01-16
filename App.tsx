@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { APP_DATA, MUSIC_TRACKS } from './constants';
+import { APP_DATA, IMAGES, MUSIC_TRACKS } from './constants';
 import { SlideType, SlideData } from './types';
 import { CoverSlide } from './components/CoverSlide';
 import { PhotoShowcaseSlide } from './components/PhotoShowcaseSlide';
@@ -54,6 +54,7 @@ const App: React.FC = () => {
   const [showExportModal, setShowExportModal] = useState(false);
   const [exportCode, setExportCode] = useState('');
   const [editingImageId, setEditingImageId] = useState<{ slideId: string, imageIndex?: number } | null>(null);
+  const [isPresentationFinished, setIsPresentationFinished] = useState(false);
 
   // Auto-Play State
   const [isAutoPlaying, setIsAutoPlaying] = useState(false);
@@ -262,7 +263,9 @@ const App: React.FC = () => {
       data,
       isEditMode,
       onEditImage: (index?: number) => openPicker(data.id, index),
-      onUpdateImage: (index: number | undefined, updates: { position?: string, scale?: number, x?: number, y?: number }) => handleImageSettingsUpdate(data.id, index, updates)
+      onUpdateImage: (index: number | undefined, updates: { position?: string, scale?: number, x?: number, y?: number }) => handleImageSettingsUpdate(data.id, index, updates),
+      isFinished: isPresentationFinished,
+      allImages: IMAGES
     };
 
     switch (data.type) {
@@ -397,6 +400,7 @@ const App: React.FC = () => {
         const playNext = () => {
           if (step >= totalSlides - 1) {
             // End
+            setIsPresentationFinished(true);
             return;
           }
 
@@ -550,7 +554,12 @@ const App: React.FC = () => {
   return (
     <div className="relative w-full h-[100dvh] overflow-hidden bg-background text-primary font-sans selection:bg-primary selection:text-white">
       {/* Audio Element */}
-      <audio ref={audioRef} src={audioSrc || undefined} loop={presentationMode === 'manual'} />
+      <audio
+        ref={audioRef}
+        src={audioSrc || undefined}
+        loop={presentationMode === 'manual'}
+        onEnded={() => setIsPresentationFinished(true)}
+      />
 
       {/* Progress Bar */}
       <div className="fixed top-0 left-0 w-full h-1 bg-gray-200 z-50">

@@ -637,7 +637,7 @@ export const APP_DATA: SlideData[] = [
       }
     ],
     "floatingImages": [
-      { "src": "/img/30.jpg", "x": 22.8, "y": 39.1, "size": 100 },
+      { "src": "/img/30.jpg", "x": 22.8, "y": 39.1, "size": 100, cyclic: true },
       { "src": "/img/8.jpeg", "x": 20, "y": 70, "size": 120 },
       { "src": "/img/4.jpeg", "x": 91.8, "y": 15.9, "size": 90 },
       { "src": "/img/39.png", "x": 87.4, "y": 41.5, "size": 110 },
