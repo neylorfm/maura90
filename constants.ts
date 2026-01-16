@@ -73,7 +73,7 @@ export const APP_DATA: SlideData[] = [
         "scale": 110
       },
       {
-        "src": "/img/39.png",
+        "src": "/img/39.jpg",
         "label": "Amor",
         "sublabel": "Família",
         "rotation": -1
@@ -388,7 +388,7 @@ export const APP_DATA: SlideData[] = [
         "rotation": 2
       },
       {
-        "src": "/img/25.png",
+        "src": "/img/25.jpg",
         "label": "Amor",
         "sublabel": "Família",
         "rotation": -1,
